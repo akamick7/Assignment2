@@ -1,0 +1,144 @@
+---
+title: "HRP 203: Assignment4"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+#read in data and load necessary packages 
+library(gtsummary)
+library(dplyr)
+library(boot)
+library(ggplot2)
+
+data <- read.csv("raw-data/cohort.csv")
+#summary(data)
+
+```
+
+## Introduction
+
+Numerous personal factors impact the total amount of health expenditures an individual has in a given health care encounter. In particular, demographic information such as age, sex, and comorbidity history can make health care encounters more or less complicated. For example, chest pain in a 72-year-old with a history of smoking and cardiovascular disease may require more work than chest pain in a 24-year-old without a history of smoking and cardiovascular disease.
+
+In this analysis, we compare prices among those with versus those without smoking history and cardiovascular history, separately, to determine if the presence of one of these comorbidities dramatically affects overall costs. Then, we determine the validity of using variables commonly available in the electronic health record, such as age, sex, smoking history, and history of cardiovascular disease to predict costs of an individual health care encounter.
+
+## Methods
+
+First, we test if there is a significant difference in costs among those with and without smoking history as well as a history of cardiovascular disease. Then, we use a prediction model to estimate costs given age, sex, and comorbidity history.
+
+*Data*
+
+The data is a simulated cohort of 5,000 individuals.
+
+*Data Analysis*
+
+We compared costs of health encounters among those with and without smoking history and history of cardiovascular disease. A two-sided t-test was used to determine if the mean cost of the two groups were the same. We considered an alpha of less than 0.05 to be significant.
+
+For the main prediction model, we used a generalized linear model of the form:
+
+$Cost = \alpha * smokehx + \beta * Female  + \gamma * age + \delta * cardiachx$
+
+We trained the model on a random 70% subset of the data, and then tested the model on the remaining 30% of the data.
+
+## Results
+
+*Descriptive statistics*
+
+Of the 5,000 simulated individuals, 2,866 (57%) were female. The median age was 45 with an interquartile range of 31 to 59. 646 (13%) individuals had a smoking history, while 275 (5.5%) had a history of cardiovascular disease. Median cost was \$9,376 (USD) with an interquartile range of \$9,090 to \$9,676 (Table 1).
+
+```{r}
+#| echo: false
+#| warning: false
+tbl_summary(data)
+```
+
+**Table 1:** Summary statistics of the simulated data.
+
+*Costs among those with and without smoking history*
+
+The mean cost of a healthcare encounter among those with a smoking history was \$9,903, while the mean cost of a healthcare encounter among those who do not smoke was \$9,323. A two sided t-test resulted in a p-value of \<0.001, suggesting there is a difference in costs among those with and without a smoking history.
+
+```{r}
+#| echo: false
+df_smk <- data[data$smoke == 1,]
+df_nosmk <- data[data$smoke == 0,]
+
+t.test(x = df_smk$cost, y = df_nosmk$cost)
+```
+
+*Costs among those with and without history of cardiovascular disease*
+
+The mean cost of a healthcare encounter among those with a history of cardiovascular disease was \$10,218, while the mean cost of a healthcare encounter among those who do not have a history of cardiovascular disease was \$9,350. A two sided t-test resulted in a p-value of \<0.001, suggesting there is a difference in costs among those with and without a history of cardiovascular disease.
+
+```{r}
+#| echo: false
+df_cardiac <- data[data$cardiac == 1,]
+df_nocardiac <- data[data$cardiac == 0,]
+
+t.test(x = df_cardiac$cost, y = df_nocardiac$cost)
+```
+
+*Cost prediction model*
+
+We used a generalized linear model to predict cost from four variables readily available in electronic health record data: age, sex, smoking history, history of cardiovascular disease. We found that all four of the variables included had a significant coefficient, so we included all four in the model (Table 2).
+
+A history of smoking increases costs, on average, by \$498 dollars compared to no history of smoking. Being female decreases costs, on average, by \$274. Each additional year of age increases costs by approximately \$17. Finally, a history of cardiovascular disease increases costs, on average, by \$538 compared to those without a history of cardiovascular disease.
+
+```{r}
+#| echo: false
+set.seed(435)
+training <- sample(seq_len(nrow(data)), size = 3500)
+df_train <- data[training, ]
+df_test <- data[-training, ]
+
+m1 <- glm(cost ~ smoke + female + age + cardiac, 
+       data = df_train)
+
+tbl_regression(m1)
+
+df_test$predicted <- predict.glm(m1, newdata = df_test)
+df_test$difference <- df_test$cost - df_test$predicted
+
+```
+
+**Table 2:** Summary table of variable coefficients in generalized linear model.
+
+Finally, we use two plotting methods to confirm accuracy of our prediction model. When we plot the true cost versus the predicted cost, a linear trend is observed (Figure 1). Additionally, when we plot the difference between the true cost and the predicted cost, the differences are normally distributed and centered around zero (Figure 2).
+
+```{r}
+#| echo: false
+ggplot(df_test, aes(x = cost, y = predicted)) +
+      geom_point(size = 2) +
+   labs(
+    title = "Predicted versus reported costs",
+    x = "Reported Cost",
+    y = "Model Predicted Cost"
+  ) +
+      theme_minimal()
+```
+
+**Figure 1:** Scatter plot of predicted costs compared to reported costs.
+
+```{r}
+#| echo: false
+hist(df_test$difference,
+     xlab = "Difference in reported cost versus model predicted cost ($)",
+     ylab = "Count",
+     main = "Difference between reported and model predicted costs")
+```
+
+**Figure 2:** Histogram of the difference between predicted cost and reported cost.
+
+## Discussion
+
+In conclusion, we see that all four factors, age, sex, smoking history, and history of cardiovascular disease, significantly impact the overall reported cost of a healthcare encounter. Additionally, we see that when used to predict health care costs, predicted costs have a linear relationship with reported costs. Additionally, we see that the differences between predicted and reported costs are normally distributed around zero.
+
+There are some limitations to this analysis: there are some observations for which the model prediction and expected cost are larger than \$500 different, although that is only about 5% of the median cost. Additionally, the simulated dataset represents a particular subsection of all patients, and generalizability outside of this patient population may be difficult.
+
+Taken together, this analysis suggests that evidence regularly collected from the electronic health record including age, sex, and certain comorbidities can accurately predict expected healthcare costs of a healthcare encounter for patients similar to those in our simulated data set.
+
+## AI Statement:
+
+No generative AI was used for any portion of this assignment.
